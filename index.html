@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Tab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --void: #000;
+    --deep: #050510;
+    --accent: #7c5cbf;
+    --accent2: #3ad8c4;
+    --glow: rgba(124,92,191,0.6);
+    --glow2: rgba(58,216,196,0.4);
+    --glass: rgba(255,255,255,0.04);
+    --glass-border: rgba(255,255,255,0.08);
+    --text: #e8e8f0;
+    --text-dim: rgba(232,232,240,0.5);
+    --danger: #e2574a;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--void);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── CANVAS ── */
+  #canvas { position: fixed; inset: 0; z-index: 0; }
+
+  /* ── LAYOUT ── */
+  #app {
+    position: relative; z-index: 10;
+    width: 100%; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 32px 24px 24px;
+    overflow-y: auto;
+    gap: 20px;
+  }
+
+  /* ── CUSTOM TEXT ── */
+  #hero-text {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(14px, 2vw, 20px);
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.3s;
+    min-height: 28px;
+    text-shadow: 0 0 20px var(--glow);
+  }
+  #hero-text:hover { color: var(--text); }
+  #hero-text.editing {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 6px 16px;
+    outline: none;
+    color: var(--text);
+    width: 100%;
+    max-width: 700px;
+    font-size: 14px;
+  }
+
+  /* ── CLOCK ── */
+  #clock {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(42px, 8vw, 88px);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    text-shadow: 0 0 40px var(--glow), 0 0 80px rgba(124,92,191,0.3);
+    line-height: 1;
+    user-select: none;
+  }
+
+  /* ── SEARCH ── */
+  #search-wrap {
+    width: 100%; max-width: 640px;
+    position: relative;
+    margin-top: 4px;
+  }
+  #search-form { display: flex; }
+  #search-input {
+    width: 100%;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 50px;
+    padding: 14px 56px 14px 24px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    outline: none;
+    backdrop-filter: blur(20px);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  #search-input::placeholder { color: var(--text-dim); }
+  #search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow), inset 0 0 20px rgba(124,92,191,0.05);
+  }
+  #search-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: var(--accent);
+    border: none; border-radius: 50%;
+    width: 40px; height: 40px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s, box-shadow 0.2s;
+    color: #fff;
+  }
+  #search-btn:hover { background: #9d7de0; box-shadow: 0 0 16px var(--glow); }
+
+  /* ── REDIRECTS GRID ── */
+  #redirects-section { width: 100%; max-width: 800px; }
+  #redirects-grid {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    justify-content: center;
+  }
+  .redirect-card {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    backdrop-filter: blur(10px);
+    position: relative;
+  }
+  .redirect-card:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .redirect-card img.favicon {
+    width: 16px; height: 16px; border-radius: 3px;
+    object-fit: contain;
+  }
+  .redirect-card .del-btn {
+    position: absolute; top: -6px; right: -6px;
+    width: 18px; height: 18px;
+    background: var(--danger);
+    border: none; border-radius: 50%;
+    color: #fff; font-size: 11px;
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer; line-height: 1;
+  }
+  .edit-mode .redirect-card .del-btn { display: flex; }
+
+  /* ── WIDGETS GRID ── */
+  #widgets-section { width: 100%; max-width: 800px; }
+  #widgets-grid {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    justify-content: center;
+  }
+  .widget-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    min-width: 180px;
+    backdrop-filter: blur(16px);
+    position: relative;
+  }
+  .widget-card .del-btn {
+    position: absolute; top: -6px; right: -6px;
+    width: 18px; height: 18px;
+    background: var(--danger);
+    border: none; border-radius: 50%;
+    color: #fff; font-size: 11px;
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .edit-mode .widget-card .del-btn { display: flex; }
+  .widget-title {
+    font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 6px;
+  }
+  .widget-value { font-size: 22px; font-weight: 600; }
+  .widget-note { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* Weather widget */
+  #w-weather .widget-value { font-size: 36px; }
+
+  /* ── ADD BUTTON ── */
+  #add-btn {
+    background: var(--glass);
+    border: 1px dashed var(--glass-border);
+    border-radius: 50px;
+    padding: 10px 24px;
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    display: none;
+  }
+  #add-btn:hover { border-color: var(--accent); color: var(--text); }
+  .edit-mode #add-btn { display: inline-block; }
+
+  /* ── TOP CONTROLS ── */
+  #top-bar {
+    position: fixed; top: 16px; right: 20px;
+    display: flex; gap: 8px; z-index: 100;
+  }
+  .ctrl-btn {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    backdrop-filter: blur(10px);
+  }
+  .ctrl-btn:hover { color: var(--text); border-color: var(--accent); }
+  .ctrl-btn.active { color: var(--accent2); border-color: var(--accent2); }
+
+  /* ── MODAL ── */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-backdrop.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: #0d0d1a;
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 28px 32px;
+    width: 100%; max-width: 400px;
+    box-shadow: 0 0 60px rgba(124,92,191,0.3);
+  }
+  .modal h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px; font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 20px;
+    color: var(--accent2);
+  }
+  .modal label {
+    display: block; font-size: 12px;
+    color: var(--text-dim); margin-bottom: 6px;
+    letter-spacing: 0.06em;
+  }
+  .modal input, .modal select {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 14px;
+    transition: border-color 0.2s;
+  }
+  .modal input:focus, .modal select:focus { border-color: var(--accent); }
+  .modal select option { background: #0d0d1a; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-primary {
+    flex: 1;
+    background: var(--accent);
+    border: none; border-radius: 10px;
+    padding: 10px; color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #9d7de0; }
+  .btn-secondary {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px; padding: 10px;
+    color: var(--text-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+  .modal-error { color: var(--danger); font-size: 12px; margin-bottom: 10px; display: none; }
+
+  /* ── DATE ── */
+  #date-line {
+    font-size: 13px; letter-spacing: 0.15em;
+    color: var(--text-dim);
+    font-family: 'Orbitron', monospace;
+    text-align: center;
+  }
+
+  /* scrollbar */
+  #app::-webkit-scrollbar { width: 4px; }
+  #app::-webkit-scrollbar-track { background: transparent; }
+  #app::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="top-bar">
+  <button class="ctrl-btn" id="login-btn">⊙ Login</button>
+  <button class="ctrl-btn" id="edit-btn" style="display:none">✎ Edit</button>
+</div>
+
+<div id="app">
+  <!-- Hero text (editable) -->
+  <div id="hero-text">INITIALISING VOID...</div>
+
+  <!-- Clock + date -->
+  <div id="clock">00:00:00</div>
+  <div id="date-line">LOADING DATE</div>
+
+  <!-- Search -->
+  <div id="search-wrap">
+    <form id="search-form" action="https://www.google.com/search" method="GET" target="_blank">
+      <input id="search-input" name="q" type="text" placeholder="Search the void..." autocomplete="off" spellcheck="false">
+      <button id="search-btn" type="submit" aria-label="Search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+
+  <!-- Redirects -->
+  <div id="redirects-section">
+    <div id="redirects-grid"></div>
+  </div>
+
+  <!-- Widgets -->
+  <div id="widgets-section">
+    <div id="widgets-grid"></div>
+  </div>
+
+  <!-- Add button (shown in edit mode) -->
+  <button id="add-btn">＋ Add redirect or widget</button>
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal-backdrop" id="login-modal">
+  <div class="modal">
+    <h2 id="login-title">IDENTIFY YOURSELF</h2>
+    <div class="modal-error" id="login-error">Incorrect password.</div>
+    <label>Password</label>
+    <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+    <div id="setup-fields" style="display:none">
+      <label>Confirm Password</label>
+      <input type="password" id="login-pass2" placeholder="••••••••">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="login-submit">Enter</button>
+      <button class="btn-secondary" id="login-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <h2 id="add-title">ADD ITEM</h2>
+    <label>Type</label>
+    <select id="add-type">
+      <option value="redirect">Redirect / Link</option>
+      <option value="widget-clock">Widget — World Clock</option>
+      <option value="widget-note">Widget — Sticky Note</option>
+      <option value="widget-countdown">Widget — Countdown</option>
+      <option value="widget-weather">Widget — Weather</option>
+    </select>
+    <div id="add-redirect-fields">
+      <label>Label</label>
+      <input type="text" id="add-label" placeholder="e.g. GitHub">
+      <label>URL</label>
+      <input type="text" id="add-url" placeholder="https://github.com">
+    </div>
+    <div id="add-widget-fields" style="display:none">
+      <label id="add-widget-label-text">Config</label>
+      <input type="text" id="add-widget-config" placeholder="">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="add-submit">Add</button>
+      <button class="btn-secondary" id="add-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// BLACK HOLE CANVAS
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H, stars = [], diskParticles = [];
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); initScene(); });
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function initScene() {
+  // Stars
+  stars = [];
+  for (let i = 0; i < 340; i++) {
+    stars.push({
+      x: Math.random() * W, y: Math.random() * H,
+      r: rand(0.3, 1.8),
+      alpha: rand(0.2, 0.9),
+      twinkle: rand(0.005, 0.025),
+      phase: Math.random() * Math.PI * 2,
+      drift: { x: rand(-0.02, 0.02), y: rand(-0.02, 0.02) }
+    });
+  }
+  // Accretion disk particles
+  diskParticles = [];
+  for (let i = 0; i < 600; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = rand(BH_R * 1.05, BH_R * 3.8);
+    diskParticles.push({
+      angle,
+      dist,
+      speed: rand(0.004, 0.018) * (BH_R * 2.5 / dist),
+      alpha: rand(0.3, 1),
+      size: rand(0.4, 2.2),
+      hue: rand(200, 300), // blue-purple range
+      layer: Math.random() < 0.3 ? 1 : 0 // some particles above/below
+    });
+  }
+}
+
+const BH_R = () => Math.min(W, H) * 0.09;
+let _BH_R = 80;
+function getBHR() { return _BH_R; }
+
+function tick(ts) {
+  _BH_R = Math.min(W, H) * 0.09;
+  const cx = W / 2, cy = H / 2;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Deep space gradient bg
+  const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H));
+  bg.addColorStop(0, '#03030f');
+  bg.addColorStop(0.5, '#020208');
+  bg.addColorStop(1, '#000');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  stars.forEach(s => {
+    s.phase += s.twinkle;
+    s.x += s.drift.x; s.y += s.drift.y;
+    if (s.x < 0) s.x = W; if (s.x > W) s.x = 0;
+    if (s.y < 0) s.y = H; if (s.y > H) s.y = 0;
+    const a = s.alpha * (0.6 + 0.4 * Math.sin(s.phase));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(220,210,255,${a})`;
+    ctx.fill();
+  });
+
+  // Gravitational lensing glow (outer rings)
+  for (let i = 4; i >= 1; i--) {
+    const rg = ctx.createRadialGradient(cx, cy, _BH_R * (0.8 + i * 0.3), cx, cy, _BH_R * (0.8 + i * 0.3 + 0.8));
+    const a = 0.07 / i;
+    rg.addColorStop(0, `rgba(130,80,220,${a})`);
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, _BH_R * (0.8 + i * 0.3 + 0.8), 0, Math.PI * 2);
+    ctx.fillStyle = rg;
+    ctx.fill();
+  }
+
+  // Accretion disk — bottom layer
+  diskParticles.filter(p => p.layer === 0).forEach(p => {
+    p.angle += p.speed;
+    const px = cx + Math.cos(p.angle) * p.dist;
+    const py = cy + Math.sin(p.angle) * p.dist * 0.32;
+    // hide behind black hole event horizon
+    const behindBH = Math.abs(p.angle % (Math.PI * 2)) > Math.PI * 0.92 &&
+                     Math.abs(p.angle % (Math.PI * 2)) < Math.PI * 1.08;
+    if (behindBH) return;
+    const distFade = 1 - (p.dist - _BH_R * 1.05) / (_BH_R * 2.8);
+    ctx.beginPath();
+    ctx.arc(px, py, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${p.alpha * distFade * 0.6})`;
+    ctx.fill();
+  });
+
+  // Black hole void
+  ctx.beginPath();
+  ctx.arc(cx, cy, _BH_R, 0, Math.PI * 2);
+  ctx.fillStyle = '#000';
+  ctx.fill();
+
+  // Event horizon glow
+  const ehg = ctx.createRadialGradient(cx, cy, _BH_R * 0.85, cx, cy, _BH_R * 1.18);
+  ehg.addColorStop(0, 'rgba(0,0,0,0)');
+  ehg.addColorStop(0.5, 'rgba(100,60,200,0.35)');
+  ehg.addColorStop(0.8, 'rgba(58,216,196,0.15)');
+  ehg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, _BH_R * 1.18, 0, Math.PI * 2);
+  ctx.fillStyle = ehg;
+  ctx.fill();
+
+  // Accretion disk — top layer
+  diskParticles.filter(p => p.layer === 1).forEach(p => {
+    p.angle += p.speed;
+    const px = cx + Math.cos(p.angle) * p.dist;
+    const py = cy + Math.sin(p.angle) * p.dist * 0.32;
+    const distFade = 1 - (p.dist - _BH_R * 1.05) / (_BH_R * 2.8);
+    ctx.beginPath();
+    ctx.arc(px, py, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue + 30}, 90%, 80%, ${p.alpha * distFade * 0.7})`;
+    ctx.fill();
+  });
+
+  // Photon ring shimmer
+  const t2 = ts / 1000;
+  for (let i = 0; i < 3; i++) {
+    const shimmerA = 0.12 + 0.06 * Math.sin(t2 * 2.1 + i * 2.1);
+    ctx.beginPath();
+    ctx.arc(cx, cy, _BH_R * (0.98 + i * 0.04), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(58,216,196,${shimmerA})`;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(tick);
+}
+
+resize();
+initScene();
+requestAnimationFrame(tick);
+
+
+// ─────────────────────────────────────────────
+// CLOCK & DATE
+// ─────────────────────────────────────────────
+const clockEl = document.getElementById('clock');
+const dateEl = document.getElementById('date-line');
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  clockEl.textContent = `${h}:${m}:${s}`;
+  dateEl.textContent = `${DAYS[now.getDay()].toUpperCase()}  ·  ${MONTHS[now.getMonth()].toUpperCase()} ${now.getDate()}, ${now.getFullYear()}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+
+// ─────────────────────────────────────────────
+// STATE & STORAGE
+// ─────────────────────────────────────────────
+const STORE_KEY = 'voidtab_data';
+const PASS_KEY = 'voidtab_pass';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {
+    heroText: 'INITIALISING VOID...',
+    redirects: [],
+    widgets: []
+  };
+}
+
+function saveData(data) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+let state = loadData();
+let loggedIn = false;
+let editMode = false;
+
+// ─────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────
+const redirectsGrid = document.getElementById('redirects-grid');
+const widgetsGrid = document.getElementById('widgets-grid');
+const heroTextEl = document.getElementById('hero-text');
+const addBtn = document.getElementById('add-btn');
+
+function getFavicon(url) {
+  try {
+    const u = new URL(url);
+    return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=32`;
+  } catch { return ''; }
+}
+
+function renderRedirects() {
+  redirectsGrid.innerHTML = '';
+  (state.redirects || []).forEach((r, i) => {
+    const a = document.createElement('a');
+    a.className = 'redirect-card';
+    a.href = r.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const fav = getFavicon(r.url);
+    a.innerHTML = `
+      ${fav ? `<img class="favicon" src="${fav}" alt="" onerror="this.style.display='none'">` : ''}
+      <span>${r.label}</span>
+      <button class="del-btn" data-i="${i}" title="Remove">✕</button>
+    `;
+    a.querySelector('.del-btn').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      state.redirects.splice(i, 1);
+      saveData(state); renderRedirects();
+    });
+    redirectsGrid.appendChild(a);
+  });
+}
+
+function renderWidgets() {
+  widgetsGrid.innerHTML = '';
+  (state.widgets || []).forEach((w, i) => {
+    const card = document.createElement('div');
+    card.className = 'widget-card';
+    card.id = `widget-${i}`;
+    card.innerHTML = buildWidgetHTML(w, i) +
+      `<button class="del-btn" data-i="${i}" title="Remove">✕</button>`;
+    card.querySelector('.del-btn').addEventListener('click', () => {
+      state.widgets.splice(i, 1);
+      saveData(state); renderWidgets();
+    });
+    widgetsGrid.appendChild(card);
+    initWidget(w, i);
+  });
+}
+
+function buildWidgetHTML(w, i) {
+  switch (w.type) {
+    case 'widget-clock':
+      return `<div class="widget-title">${w.config || 'LOCAL'} TIME</div>
+              <div class="widget-value" id="wc-${i}">--:--</div>`;
+    case 'widget-note':
+      return `<div class="widget-title">NOTE</div>
+              <div class="widget-value" style="font-size:15px;font-weight:400;line-height:1.5;white-space:pre-wrap">${w.config || ''}</div>`;
+    case 'widget-countdown':
+      return `<div class="widget-title">COUNTDOWN</div>
+              <div class="widget-value" id="wcd-${i}">--:--:--</div>
+              <div class="widget-note">${w.label || 'Event'}</div>`;
+    case 'widget-weather':
+      return `<div class="widget-title">WEATHER</div>
+              <div class="widget-value" id="ww-${i}">…</div>
+              <div class="widget-note" id="ww-note-${i}">${w.config || 'Loading...'}</div>`;
+    default: return '';
+  }
+}
+
+function initWidget(w, i) {
+  if (w.type === 'widget-clock') {
+    const el = document.getElementById(`wc-${i}`);
+    if (!el) return;
+    function updateWC() {
+      try {
+        const now = new Date();
+        let opts = { hour: '2-digit', minute: '2-digit', hour12: false };
+        if (w.config && w.config.trim() !== 'LOCAL') {
+          opts.timeZone = w.config.trim();
+        }
+        el.textContent = new Intl.DateTimeFormat([], opts).format(now);
+      } catch { el.textContent = 'ERR'; }
+    }
+    updateWC(); el._int = setInterval(updateWC, 1000);
+  }
+  if (w.type === 'widget-countdown') {
+    const el = document.getElementById(`wcd-${i}`);
+    if (!el) return;
+    const target = new Date(w.config);
+    function updateCD() {
+      const diff = target - Date.now();
+      if (diff <= 0) { el.textContent = 'ARRIVED'; return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.textContent = d > 0 ? `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}` : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    updateCD(); el._int = setInterval(updateCD, 1000);
+  }
+  if (w.type === 'widget-weather') {
+    const el = document.getElementById(`ww-${i}`);
+    const noteEl = document.getElementById(`ww-note-${i}`);
+    if (!el) return;
+    const city = encodeURIComponent(w.config || 'London');
+    fetch(`https://wttr.in/${city}?format=j1`)
+      .then(r => r.json())
+      .then(data => {
+        const c = data.current_condition[0];
+        const temp = c.temp_C;
+        const desc = c.weatherDesc[0].value;
+        const area = data.nearest_area[0].areaName[0].value;
+        el.textContent = `${temp}°C`;
+        noteEl.textContent = `${desc} · ${area}`;
+      })
+      .catch(() => { el.textContent = 'N/A'; noteEl.textContent = 'Could not load'; });
+  }
+}
+
+function renderAll() {
+  heroTextEl.textContent = state.heroText;
+  renderRedirects();
+  renderWidgets();
+}
+
+renderAll();
+
+
+// ─────────────────────────────────────────────
+// HERO TEXT EDIT (click to edit)
+// ─────────────────────────────────────────────
+heroTextEl.addEventListener('click', () => {
+  if (!loggedIn) return;
+  const old = state.heroText;
+  heroTextEl.contentEditable = 'true';
+  heroTextEl.classList.add('editing');
+  heroTextEl.focus();
+  const sel = window.getSelection();
+  sel.selectAllChildren(heroTextEl);
+  sel.collapseToEnd();
+  function done() {
+    const val = heroTextEl.textContent.trim();
+    heroTextEl.contentEditable = 'false';
+    heroTextEl.classList.remove('editing');
+    state.heroText = val || old;
+    saveData(state);
+    heroTextEl.removeEventListener('blur', done);
+    heroTextEl.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Enter') { e.preventDefault(); done(); } }
+  heroTextEl.addEventListener('blur', done);
+  heroTextEl.addEventListener('keydown', onKey);
+});
+
+
+// ─────────────────────────────────────────────
+// LOGIN SYSTEM
+// ─────────────────────────────────────────────
+const loginModal = document.getElementById('login-modal');
+const loginTitle = document.getElementById('login-title');
+const loginPass = document.getElementById('login-pass');
+const loginPass2 = document.getElementById('login-pass2');
+const setupFields = document.getElementById('setup-fields');
+const loginError = document.getElementById('login-error');
+const loginBtn = document.getElementById('login-btn');
+const editBtn = document.getElementById('edit-btn');
+const addBtnEl = document.getElementById('add-btn');
+
+function openLoginModal() {
+  const hasPass = !!localStorage.getItem(PASS_KEY);
+  loginTitle.textContent = hasPass ? 'IDENTIFY YOURSELF' : 'SET PASSWORD';
+  setupFields.style.display = hasPass ? 'none' : 'block';
+  loginError.style.display = 'none';
+  loginPass.value = ''; loginPass2.value = '';
+  loginModal.classList.add('open');
+  setTimeout(() => loginPass.focus(), 100);
+}
+
+document.getElementById('login-cancel').addEventListener('click', () => {
+  loginModal.classList.remove('open');
+});
+
+loginModal.addEventListener('click', (e) => {
+  if (e.target === loginModal) loginModal.classList.remove('open');
+});
+
+document.getElementById('login-submit').addEventListener('click', doLogin);
+loginPass.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+loginPass2.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+function doLogin() {
+  const stored = localStorage.getItem(PASS_KEY);
+  loginError.style.display = 'none';
+  if (!stored) {
+    // Setup
+    const p1 = loginPass.value, p2 = loginPass2.value;
+    if (!p1) { loginError.textContent = 'Enter a password.'; loginError.style.display = 'block'; return; }
+    if (p1 !== p2) { loginError.textContent = 'Passwords do not match.'; loginError.style.display = 'block'; return; }
+    localStorage.setItem(PASS_KEY, btoa(p1));
+    setLoggedIn(true);
+    loginModal.classList.remove('open');
+  } else {
+    const p = loginPass.value;
+    if (btoa(p) === stored) {
+      setLoggedIn(true);
+      loginModal.classList.remove('open');
+    } else {
+      loginError.textContent = 'Incorrect password.';
+      loginError.style.display = 'block';
+      loginPass.value = '';
+    }
+  }
+}
+
+function setLoggedIn(val) {
+  loggedIn = val;
+  loginBtn.textContent = val ? '⊙ Logout' : '⊙ Login';
+  editBtn.style.display = val ? 'inline-block' : 'none';
+  if (!val) setEditMode(false);
+}
+
+loginBtn.addEventListener('click', () => {
+  if (loggedIn) { setLoggedIn(false); return; }
+  openLoginModal();
+});
+
+
+// ─────────────────────────────────────────────
+// EDIT MODE
+// ─────────────────────────────────────────────
+function setEditMode(val) {
+  editMode = val;
+  editBtn.textContent = val ? '✓ Done' : '✎ Edit';
+  editBtn.classList.toggle('active', val);
+  document.getElementById('app').classList.toggle('edit-mode', val);
+}
+editBtn.addEventListener('click', () => setEditMode(!editMode));
+
+
+// ─────────────────────────────────────────────
+// ADD MODAL
+// ─────────────────────────────────────────────
+const addModal = document.getElementById('add-modal');
+const addType = document.getElementById('add-type');
+const addLabel = document.getElementById('add-label');
+const addUrl = document.getElementById('add-url');
+const addWidgetConfig = document.getElementById('add-widget-config');
+const addWidgetLabelText = document.getElementById('add-widget-label-text');
+const addRedirectFields = document.getElementById('add-redirect-fields');
+const addWidgetFields = document.getElementById('add-widget-fields');
+
+addBtnEl.addEventListener('click', () => {
+  addType.value = 'redirect';
+  addLabel.value = ''; addUrl.value = ''; addWidgetConfig.value = '';
+  updateAddForm();
+  addModal.classList.add('open');
+  setTimeout(() => addLabel.focus(), 100);
+});
+
+addType.addEventListener('change', updateAddForm);
+
+function updateAddForm() {
+  const t = addType.value;
+  const isRedir = t === 'redirect';
+  addRedirectFields.style.display = isRedir ? 'block' : 'none';
+  addWidgetFields.style.display = isRedir ? 'none' : 'block';
+  const hints = {
+    'widget-clock': ['Timezone (e.g. Europe/London or LOCAL)', 'Europe/London'],
+    'widget-note': ['Note text', 'My note here...'],
+    'widget-countdown': ['Target date (YYYY-MM-DD)', '2026-12-31'],
+    'widget-weather': ['City name', 'London'],
+  };
+  if (!isRedir && hints[t]) {
+    addWidgetLabelText.textContent = hints[t][0];
+    addWidgetConfig.placeholder = hints[t][1];
+  }
+}
+
+document.getElementById('add-cancel').addEventListener('click', () => addModal.classList.remove('open'));
+addModal.addEventListener('click', e => { if (e.target === addModal) addModal.classList.remove('open'); });
+
+document.getElementById('add-submit').addEventListener('click', () => {
+  const t = addType.value;
+  if (t === 'redirect') {
+    const label = addLabel.value.trim();
+    let url = addUrl.value.trim();
+    if (!label || !url) return;
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    state.redirects.push({ label, url });
+  } else {
+    state.widgets.push({ type: t, config: addWidgetConfig.value.trim(), label: addLabel.value.trim() });
+  }
+  saveData(state);
+  renderAll();
+  addModal.classList.remove('open');
+});
+
+// Also wire widget label for countdown
+addType.addEventListener('change', () => {
+  addLabel.placeholder = addType.value === 'widget-countdown' ? 'Event name (e.g. New Year)' : 'e.g. GitHub';
+});
+</script>
+</body>
+</html>
