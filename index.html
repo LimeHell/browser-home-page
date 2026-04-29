@@ -583,25 +583,73 @@ setInterval(updateClock, 1000);
 
 
 // ─────────────────────────────────────────────
-// STATE & STORAGE
+// STATE & STORAGE  (localStorage + cookies, dual-write)
 // ─────────────────────────────────────────────
 const STORE_KEY = 'voidtab_data';
-const PASS_KEY = 'voidtab_pass';
+const PASS_KEY  = 'voidtab_pass';
+const COOKIE_DATA_KEY = 'voidtab_data';
+const COOKIE_PASS_KEY = 'voidtab_pass';
+const COOKIE_TTL_DAYS = 365;
 
+// ── Cookie helpers ──
+function setCookie(name, value, days) {
+  const exp = new Date(Date.now() + days * 864e5).toUTCString();
+  // SameSite=Lax works on GitHub Pages (same-origin); Secure requires HTTPS (GH Pages provides it)
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Lax; Secure`;
+}
+
+function getCookie(name) {
+  const match = document.cookie.split('; ').find(r => r.startsWith(name + '='));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
+
+function deleteCookie(name) {
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`;
+}
+
+// ── Password storage: prefer localStorage, mirror to cookie ──
+function loadPass() {
+  return localStorage.getItem(PASS_KEY) || getCookie(COOKIE_PASS_KEY) || null;
+}
+
+function savePass(hash) {
+  localStorage.setItem(PASS_KEY, hash);
+  setCookie(COOKIE_PASS_KEY, hash, COOKIE_TTL_DAYS);
+}
+
+// ── Data storage: write to both, read from whichever has data ──
 function loadData() {
+  const DEFAULTS = { heroText: 'INITIALISING VOID...', redirects: [], widgets: [] };
   try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    // localStorage first (no size limit issues for small data)
+    const ls = localStorage.getItem(STORE_KEY);
+    if (ls) {
+      const parsed = JSON.parse(ls);
+      // Keep cookie in sync when loading from LS
+      setCookie(COOKIE_DATA_KEY, ls, COOKIE_TTL_DAYS);
+      return parsed;
+    }
+    // Fall back to cookie
+    const ck = getCookie(COOKIE_DATA_KEY);
+    if (ck) {
+      const parsed = JSON.parse(ck);
+      localStorage.setItem(STORE_KEY, ck); // restore LS from cookie
+      return parsed;
+    }
   } catch(e) {}
-  return {
-    heroText: 'INITIALISING VOID...',
-    redirects: [],
-    widgets: []
-  };
+  return DEFAULTS;
 }
 
 function saveData(data) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  const json = JSON.stringify(data);
+  // Dual-write
+  localStorage.setItem(STORE_KEY, json);
+  try {
+    setCookie(COOKIE_DATA_KEY, json, COOKIE_TTL_DAYS);
+  } catch(e) {
+    // Cookie might exceed 4KB limit with many items; LS still has the data
+    console.warn('VoidTab: cookie write skipped (data too large), using localStorage only.');
+  }
 }
 
 let state = loadData();
@@ -783,7 +831,7 @@ const editBtn = document.getElementById('edit-btn');
 const addBtnEl = document.getElementById('add-btn');
 
 function openLoginModal() {
-  const hasPass = !!localStorage.getItem(PASS_KEY);
+  const hasPass = !!loadPass();
   loginTitle.textContent = hasPass ? 'IDENTIFY YOURSELF' : 'SET PASSWORD';
   setupFields.style.display = hasPass ? 'none' : 'block';
   loginError.style.display = 'none';
@@ -805,19 +853,20 @@ loginPass.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }
 loginPass2.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 function doLogin() {
-  const stored = localStorage.getItem(PASS_KEY);
+  const stored = loadPass();
   loginError.style.display = 'none';
   if (!stored) {
-    // Setup
+    // First-time setup — save to both localStorage and cookie
     const p1 = loginPass.value, p2 = loginPass2.value;
     if (!p1) { loginError.textContent = 'Enter a password.'; loginError.style.display = 'block'; return; }
     if (p1 !== p2) { loginError.textContent = 'Passwords do not match.'; loginError.style.display = 'block'; return; }
-    localStorage.setItem(PASS_KEY, btoa(p1));
+    savePass(btoa(p1));
     setLoggedIn(true);
     loginModal.classList.remove('open');
   } else {
     const p = loginPass.value;
     if (btoa(p) === stored) {
+      savePass(stored); // refresh cookie TTL on each login
       setLoggedIn(true);
       loginModal.classList.remove('open');
     } else {
